@@ -3,3 +3,6 @@
 *.jpeg
 .project
 Camera
+.settings/
+bin/
+pkg/
