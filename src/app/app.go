@@ -140,6 +140,8 @@ func main() {
 
 		if len(os.Args) == 1 {
 			time.Sleep(time.Second)
+		} else {
+			break
 		}
 	}
 	fmt.Println("Terminating the application...")
