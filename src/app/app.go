@@ -14,39 +14,30 @@ import (
 	"time"
 )
 
+var cam *webcam.Webcam
+var err error
+
 func camera() []byte {
-	cam, err := webcam.Open("/dev/video0") // Open webcam
-	if err != nil {
-		panic(err.Error())
-	}
+	if cam == nil {
+		cam, err = webcam.Open("/dev/video0") // Open webcam
+		if err != nil {
+			panic(err.Error())
+		}
 
-	defer cam.Close()
+		//	defer cam.Close()
 
-	//	format_desc := cam.GetSupportedFormats()
-	//
-	//	fmt.Println("Available formats:")
-	//	for a, s := range format_desc {
-	//		fmt.Fprintln(os.Stderr, s)
-	//		fmt.Fprintln(os.Stderr, a)
-	//
-	//
-	//
-	//		for _, b := range cam.GetSupportedFrameSizes(a) {
-	//			fmt.Fprintln(os.Stderr, b.GetString())
-	//		}
-	//
-	//	}
+		cam.SetImageFormat(0x56595559, 640, 480)
+		cam.SetBufferCount(1)
 
-	cam.SetImageFormat(0x56595559, 640, 480)
-
-	err = cam.StartStreaming()
-	if err != nil {
-		panic(err.Error())
+		err = cam.StartStreaming()
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 
 	for {
 
-		err = cam.WaitForFrame(10000)
+		err := cam.WaitForFrame(10000)
 
 		switch err.(type) {
 		case nil:
@@ -111,6 +102,28 @@ func file() []byte {
 
 }
 
+func sendToEdge(imgBase64Str string) {
+	jsonStr := []byte(fmt.Sprintf(`{"device":"countcamera1", "readings":[{"name":"cameraeiamge", "value":"%s"}]}`, imgBase64Str))
+	response, err := http.Post("http://10.30.10.53:48080/api/v1/event", "application/json", bytes.NewBuffer(jsonStr))
+	if err != nil {
+		fmt.Printf("The HTTP request failedith error %s\n", err)
+	} else {
+		data, _ := ioutil.ReadAll(response.Body)
+		fmt.Println(string(data))
+	}
+}
+
+func sendToView(imgBase64Str string) {
+	jsonStr := []byte(fmt.Sprintf(`{"image":"data:image/jpeg;base64,%s"}`, imgBase64Str))
+	response, err := http.Post("http://localhost:3000/image", "application/json", bytes.NewBuffer(jsonStr))
+	if err != nil {
+		fmt.Printf("The HTTP request failedith error %s\n", err)
+	} else {
+		data, _ := ioutil.ReadAll(response.Body)
+		fmt.Println(string(data))
+	}
+}
+
 func main() {
 
 	for {
@@ -125,21 +138,11 @@ func main() {
 		// convert the buffer bytes to base64 string
 		imgBase64Str := base64.StdEncoding.EncodeToString(buf)
 
-		//   fmt.Println(imgBase64Str)
-
-		jsonStr := []byte(fmt.Sprintf(`{"device":"countcamera1", "readings":[{"name":"cameraeiamge", "value":"%s"}]}`, imgBase64Str))
-
-		//   fmt.Println(len(jsonStr))
-		response, err := http.Post("http://localhost:48080/api/v1/event", "application/json", bytes.NewBuffer(jsonStr))
-		if err != nil {
-			fmt.Printf("The HTTP request failedith error %s\n", err)
-		} else {
-			data, _ := ioutil.ReadAll(response.Body)
-			fmt.Println(string(data))
-		}
+		go sendToEdge(imgBase64Str)
+		go sendToView(imgBase64Str)
 
 		if len(os.Args) == 1 {
-			time.Sleep(time.Second)
+			time.Sleep(time.Second / 4)
 		} else {
 			break
 		}
